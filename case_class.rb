@@ -30,12 +30,16 @@ class CaseClass::Case
     @else_block = nil
   end
 
-  def when(variant_klass, &block)
+  def when(variant_klass, *args, &block)
     variant_helper = @variants.find { |variant| variant.klass == variant_klass }
 
     fail "#{variant_klass} is not a subclass of " unless variant_helper
 
-    @variants_blocks[variant_klass] = block
+    if args.any?
+      @variants_blocks[args] = block
+    else
+      @variants_blocks[variant_klass] = block
+    end
 
     if all_branches_exhausted?
       run
@@ -50,10 +54,11 @@ class CaseClass::Case
   end
 
   def run
-    variant_block = @variants_blocks[@instance.class]
+    variant_block = @variants_blocks[[@instance.class] + @instance.vars] ||
+      @variants_blocks[@instance.class]
 
     if variant_block
-      variant_block.call(*variables_from_instance)
+      variant_block.call(*@instance.vars)
     else
       @else_block.call()
     end
@@ -83,7 +88,16 @@ module CaseClass
       def variant_of(klass, options = {})
         VariantHelper.new(self, options)
           .then { |variant| klass._add_variant(variant) }
+        @variables = Array(options[:variables]) || []
       end
+
+      def variables
+        @variables
+      end
+    end
+
+    def vars
+      self.class.variables.map { |var| self.public_send(var) }
     end
   end
 
